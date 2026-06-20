@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Backend (Python)
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Web UI (npm)
+  - package-ecosystem: npm
+    directory: /backend/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Android app (Gradle)
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

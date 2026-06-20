@@ -10,6 +10,12 @@ services:
       - ./data:/data            # SQLite request store
     environment:
       - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${PORT:-5056}/api/health')"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 # This base file pulls the prebuilt image and runs lidseeker in Lidarr-native
 # mode (download progress comes straight from Lidarr's queue — works with any

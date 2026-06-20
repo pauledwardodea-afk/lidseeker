@@ -1,6 +1,7 @@
 """lidseeker — a music request backend (the 'seerr' for Lidarr)."""
 import asyncio
 import logging
+import mimetypes
 import os
 from typing import Optional
 
@@ -366,7 +367,7 @@ async def put_settings(
     try:
         changed = soularr_cfg.set_quality(body.quality)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(503, f"Couldn't update quality: {e}")
+        raise HTTPException(503, f"Couldn't update quality: {e}") from e
     if changed:
         try:
             await soularr_ctl.trigger_run()   # restart Soularr to apply
@@ -408,7 +409,7 @@ async def search_now(_user: str = Depends(auth.require_user)) -> dict:
         await _search_now()
     except Exception as e:  # noqa: BLE001 — surface a clean error to the app
         log.warning("search-now failed: %s", e)
-        raise HTTPException(503, "Couldn't start a search right now.")
+        raise HTTPException(503, "Couldn't start a search right now.") from e
     return {"ok": True, "message": "Searching now — this can take a minute."}
 
 
@@ -431,6 +432,7 @@ def _to_out(row: dict, pipeline: dict | None = None) -> dict:
 # --------------------------------------------------------------------------
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
 if os.path.isdir(_WEB_DIR):
+    mimetypes.add_type("application/manifest+json", ".webmanifest")
     _assets = os.path.join(_WEB_DIR, "assets")
     if os.path.isdir(_assets):
         app.mount("/assets", StaticFiles(directory=_assets), name="assets")

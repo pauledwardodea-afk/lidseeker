@@ -38,5 +38,5 @@ def require_user(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> str:
     try:
         payload = jwt.decode(creds.credentials, config.JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from None
     return payload["sub"]

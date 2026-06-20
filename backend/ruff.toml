@@ -1,0 +1,10 @@
+target-version = "py312"
+line-length = 100
+
+[lint]
+# A pragmatic set: pyflakes (F), pycodestyle errors/warnings (E/W), bugbear (B).
+select = ["E", "W", "F", "B"]
+ignore = [
+  "E501",  # line length — long comments/strings are fine here
+  "B008",  # function calls in arg defaults — idiomatic for FastAPI Depends()/Query()
+]
