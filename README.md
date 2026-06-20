@@ -158,7 +158,9 @@ docker compose -f docker-compose.yml -f docker-compose.soularr.yml up -d
 - **Discover** — unowned releases from artists already in your library, browsable by genre and decade.
 - **Push notifications** — optional [ntfy](https://ntfy.sh) push the moment an album becomes available
   (works with the app closed).
-- **Single-user, self-hosted** — JWT auth; your Lidarr key stays on the server.
+- **Multi-user** — admin-managed accounts (Settings → Users). Everyone sees only their own
+  requests; admins see everyone's, with who requested what. JWT auth; your Lidarr key stays on the
+  server.
 
 ## Configuration
 
@@ -170,8 +172,8 @@ All settings are environment variables on the backend container.
 |---|---|
 | `LIDARR_URL` | Your Lidarr base URL (e.g. `http://localhost:8686`) |
 | `LIDARR_API_KEY` | Lidarr API key (Settings → General) |
-| `APP_USER` | Login username |
-| `APP_PASSWORD` | Login password (plaintext; hashed at startup). *Or* set `APP_PASS_HASH` to a pre-computed bcrypt hash |
+| `APP_USER` | Username of the **first admin** (seeded on first start; add more users in-app) |
+| `APP_PASSWORD` | First admin's password (plaintext; hashed at startup). *Or* set `APP_PASS_HASH` to a pre-computed bcrypt hash |
 | `JWT_SECRET` | Any long random string used to sign sessions |
 
 **Common optional**
@@ -220,6 +222,12 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 ## Changelog
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
+
+### Unreleased
+- **Multi-user accounts** (admin-managed) — add users in Settings → Users; requests are attributed
+  per person; non-admins see only their own, admins see all. `APP_USER`/`APP_PASSWORD` now seed the
+  first admin (existing single-user installs upgrade seamlessly). Web UI only this round; the Android
+  app still works against any account (in-app user management is a follow-up).
 
 ### v0.2.0-beta
 - **Built-in web UI** (React/Vite) served by the backend at `/` — full parity with the app (Discover,

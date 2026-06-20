@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS requests (
     last_attempt_at  TEXT,
     UNIQUE(type, foreign_id)
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'user',
+    created_at    TEXT NOT NULL
+);
 """
 
 
@@ -39,6 +47,26 @@ def init() -> None:
             c.execute("ALTER TABLE requests ADD COLUMN search_attempts INTEGER NOT NULL DEFAULT 0")
         if "last_attempt_at" not in cols:
             c.execute("ALTER TABLE requests ADD COLUMN last_attempt_at TEXT")
+        if "user_id" not in cols:
+            c.execute("ALTER TABLE requests ADD COLUMN user_id INTEGER")
+    seed_admin_from_env()
+
+
+def seed_admin_from_env() -> None:
+    """Bootstrap the first admin from APP_USER/APP_PASS_HASH when there are no
+    users yet, so existing single-user deployments keep working and become the
+    admin. Existing requests are attributed to that admin."""
+    if not config.APP_PASS_HASH:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    with _conn() as c:
+        if c.execute("SELECT COUNT(*) FROM users").fetchone()[0] > 0:
+            return
+        cur = c.execute(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
+            (config.APP_USER, config.APP_PASS_HASH, "admin", now),
+        )
+        c.execute("UPDATE requests SET user_id=? WHERE user_id IS NULL", (cur.lastrowid,))
 
 
 @contextmanager
@@ -55,24 +83,27 @@ def _conn():
 def upsert_request(*, type: str, foreign_id: str, title: str, artist: str | None,
                    image_url: str | None, lidarr_artist_id: int | None,
                    lidarr_album_id: int | None, status: str,
-                   error: str | None = None) -> dict:
+                   error: str | None = None, user_id: int | None = None) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     with _conn() as c:
         c.execute(
             """
             INSERT INTO requests (type, foreign_id, title, artist, image_url,
-                                  lidarr_artist_id, lidarr_album_id, status, error, created_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+                                  lidarr_artist_id, lidarr_album_id, status, error,
+                                  created_at, user_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(type, foreign_id) DO UPDATE SET
                 title=excluded.title, artist=excluded.artist, image_url=excluded.image_url,
                 lidarr_artist_id=excluded.lidarr_artist_id,
                 lidarr_album_id=excluded.lidarr_album_id,
                 status=excluded.status, error=excluded.error,
+                -- the latest requester owns it
+                user_id=COALESCE(excluded.user_id, requests.user_id),
                 -- a (re)request starts the give-up clock fresh
                 search_attempts=0, last_attempt_at=NULL
             """,
             (type, foreign_id, title, artist, image_url, lidarr_artist_id,
-             lidarr_album_id, status, error, now),
+             lidarr_album_id, status, error, now, user_id),
         )
         row = c.execute(
             "SELECT * FROM requests WHERE type=? AND foreign_id=?", (type, foreign_id)
@@ -80,9 +111,15 @@ def upsert_request(*, type: str, foreign_id: str, title: str, artist: str | None
         return dict(row)
 
 
-def list_requests() -> list[dict]:
+def list_requests(user_id: int | None = None) -> list[dict]:
+    """All requests, or just one user's when user_id is given."""
     with _conn() as c:
-        rows = c.execute("SELECT * FROM requests ORDER BY created_at DESC").fetchall()
+        if user_id is None:
+            rows = c.execute("SELECT * FROM requests ORDER BY created_at DESC").fetchall()
+        else:
+            rows = c.execute(
+                "SELECT * FROM requests WHERE user_id=? ORDER BY created_at DESC", (user_id,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -154,3 +191,61 @@ def active_request_foreign_ids() -> set[str]:
             "SELECT foreign_id FROM requests WHERE status NOT IN ('error', 'failed')"
         ).fetchall()
         return {r["foreign_id"] for r in rows}
+
+
+# --------------------------------------------------------------------------
+# Users
+# --------------------------------------------------------------------------
+def get_user(username: str) -> dict | None:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_users() -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, username, role, created_at FROM users ORDER BY created_at"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def usernames_by_id() -> dict[int, str]:
+    """Map of user id -> username, for attributing requests."""
+    with _conn() as c:
+        return {r["id"]: r["username"] for r in c.execute("SELECT id, username FROM users")}
+
+
+def create_user(username: str, password_hash: str, role: str) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
+            (username, password_hash, role, now),
+        )
+        row = c.execute(
+            "SELECT id, username, role, created_at FROM users WHERE id=?", (cur.lastrowid,)
+        ).fetchone()
+        return dict(row)
+
+
+def delete_user(user_id: int) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM users WHERE id=?", (user_id,))
+        return cur.rowcount > 0
+
+
+def count_admins() -> int:
+    with _conn() as c:
+        return c.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+
+
+def set_user_password(user_id: int, password_hash: str) -> None:
+    with _conn() as c:
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (password_hash, user_id))

@@ -5,6 +5,7 @@ import mimetypes
 import os
 from typing import Optional
 
+import bcrypt
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,8 +14,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import auth, config, db, lidarr, notify, slskd, soularr_cfg, soularr_ctl
 from .schemas import (
-    ActionResult, DiscoverCategories, LoginIn, RequestIn, RequestOut, SearchResult,
-    ServiceLink, Settings, SettingsIn, TokenOut, Track,
+    ActionResult, DiscoverCategories, LoginIn, Me, PasswordChange, RequestIn, RequestOut,
+    SearchResult, ServiceLink, Settings, SettingsIn, TokenOut, Track, User, UserCreate,
 )
 
 log = logging.getLogger("lidseeker")
@@ -151,9 +152,70 @@ async def health() -> dict:
 # --------------------------------------------------------------------------
 @app.post("/api/auth/login", response_model=TokenOut)
 async def login(body: LoginIn) -> TokenOut:
-    if not auth.verify_credentials(body.username, body.password):
+    user = auth.verify_credentials(body.username, body.password)
+    if not user:
         raise HTTPException(401, "Invalid credentials")
-    return TokenOut(token=auth.issue_token(body.username))
+    return TokenOut(token=auth.issue_token(user))
+
+
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+@app.get("/api/me", response_model=Me)
+async def me(user: auth.CurrentUser = Depends(auth.require_user)) -> dict:
+    return {"username": user.username, "role": user.role}
+
+
+@app.put("/api/me/password", response_model=ActionResult)
+async def change_my_password(
+    body: PasswordChange, user: auth.CurrentUser = Depends(auth.require_user)
+) -> dict:
+    if not auth.verify_credentials(user.username, body.currentPassword):
+        raise HTTPException(400, "Current password is incorrect.")
+    if len(body.newPassword) < 4:
+        raise HTTPException(400, "New password is too short.")
+    db.set_user_password(user.id, _hash(body.newPassword))
+    return {"ok": True, "message": "Password changed."}
+
+
+# --------------------------------------------------------------------------
+# Users (admin only)
+# --------------------------------------------------------------------------
+@app.get("/api/users", response_model=list[User])
+async def list_users(_admin: auth.CurrentUser = Depends(auth.require_admin)) -> list[dict]:
+    return [
+        {"id": u["id"], "username": u["username"], "role": u["role"], "createdAt": u["created_at"]}
+        for u in db.list_users()
+    ]
+
+
+@app.post("/api/users", response_model=User)
+async def create_user(
+    body: UserCreate, _admin: auth.CurrentUser = Depends(auth.require_admin)
+) -> dict:
+    username = body.username.strip()
+    if not username or not body.password:
+        raise HTTPException(400, "Username and password are required.")
+    if db.get_user(username):
+        raise HTTPException(409, "That username is already taken.")
+    u = db.create_user(username, _hash(body.password), body.role)
+    return {"id": u["id"], "username": u["username"], "role": u["role"], "createdAt": u["created_at"]}
+
+
+@app.delete("/api/users/{uid}", response_model=ActionResult)
+async def delete_user(
+    uid: int, admin: auth.CurrentUser = Depends(auth.require_admin)
+) -> dict:
+    target = db.get_user_by_id(uid)
+    if not target:
+        raise HTTPException(404, "User not found.")
+    if uid == admin.id:
+        raise HTTPException(400, "You can't delete your own account.")
+    if target["role"] == "admin" and db.count_admins() <= 1:
+        raise HTTPException(400, "Can't delete the last admin.")
+    db.delete_user(uid)
+    return {"ok": True, "message": f"Removed {target['username']}."}
 
 
 # --------------------------------------------------------------------------
@@ -226,7 +288,7 @@ async def _process_request(req_id: int, type: str, foreign_id: str) -> None:
 async def create_request(
     body: RequestIn,
     background: BackgroundTasks,
-    _user: str = Depends(auth.require_user),
+    user: auth.CurrentUser = Depends(auth.require_user),
 ) -> dict:
     req_type, foreign_id = body.type, body.foreignId
 
@@ -254,15 +316,19 @@ async def create_request(
         type=req_type, foreign_id=foreign_id, title=norm["title"],
         artist=norm["artist"], image_url=norm["imageUrl"],
         lidarr_artist_id=None, lidarr_album_id=None, status="pending",
+        user_id=user.id,
     )
     background.add_task(_process_request, row["id"], req_type, foreign_id)
     return _to_out(row)
 
 
 @app.get("/api/requests", response_model=list[RequestOut])
-async def list_requests(_user: str = Depends(auth.require_user)) -> list[dict]:
+async def list_requests(user: auth.CurrentUser = Depends(auth.require_user)) -> list[dict]:
+    # Admins see everyone's requests (with the requester shown); others see only theirs.
+    rows = db.list_requests() if user.is_admin else db.list_requests(user_id=user.id)
+    names = db.usernames_by_id() if user.is_admin else {}
     out = []
-    for row in db.list_requests():
+    for row in rows:
         # Refresh live status from Lidarr for resolved requests. 'error' and
         # 'failed' are terminal — don't let a 0% album flip them back to pending.
         if row["status"] not in ("error", "failed") and (
@@ -279,16 +345,19 @@ async def list_requests(_user: str = Depends(auth.require_user)) -> list[dict]:
             row["lidarr_album_id"], row["lidarr_artist_id"],
             row["artist"], row["status"], row["created_at"],
         )
-        out.append(_to_out(row, pipeline))
+        out.append(_to_out(row, pipeline, requested_by=names.get(row.get("user_id"))))
     return out
 
 
 @app.delete("/api/requests/{rid}", response_model=ActionResult)
-async def delete_request(rid: int, _user: str = Depends(auth.require_user)) -> dict:
+async def delete_request(rid: int, user: auth.CurrentUser = Depends(auth.require_user)) -> dict:
     """Remove a request and stop it being wanted (unmonitor the album)."""
-    row = db.delete_request(rid)
-    if not row:
+    existing = db.get_request(rid)
+    if not existing:
         raise HTTPException(404, "Request not found")
+    if not user.is_admin and existing.get("user_id") != user.id:
+        raise HTTPException(403, "That isn't your request.")
+    row = db.delete_request(rid)
     if row["lidarr_album_id"]:
         try:
             await lidarr.set_album_monitored([row["lidarr_album_id"]], False)
@@ -298,12 +367,14 @@ async def delete_request(rid: int, _user: str = Depends(auth.require_user)) -> d
 
 
 @app.post("/api/requests/{rid}/retry", response_model=ActionResult)
-async def retry_request(rid: int, _user: str = Depends(auth.require_user)) -> dict:
+async def retry_request(rid: int, user: auth.CurrentUser = Depends(auth.require_user)) -> dict:
     """Un-stick a failed/stuck request: clear Soularr's denylist entry, re-monitor,
     re-search, and force a Soularr run."""
     row = db.get_request(rid)
     if not row:
         raise HTTPException(404, "Request not found")
+    if not user.is_admin and row.get("user_id") != user.id:
+        raise HTTPException(403, "That isn't your request.")
     soularr_cfg.clear_denylist_entry(row["lidarr_album_id"])
     if row["lidarr_album_id"]:
         try:
@@ -413,7 +484,7 @@ async def search_now(_user: str = Depends(auth.require_user)) -> dict:
     return {"ok": True, "message": "Searching now — this can take a minute."}
 
 
-def _to_out(row: dict, pipeline: dict | None = None) -> dict:
+def _to_out(row: dict, pipeline: dict | None = None, requested_by: str | None = None) -> dict:
     return {
         "id": row["id"],
         "type": row["type"],
@@ -424,6 +495,7 @@ def _to_out(row: dict, pipeline: dict | None = None) -> dict:
         "status": row["status"],
         "createdAt": row["created_at"],
         "pipeline": pipeline,
+        "requestedBy": requested_by,
     }
 
 

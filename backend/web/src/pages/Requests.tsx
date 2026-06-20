@@ -91,7 +91,13 @@ export function Requests() {
     <>
       <div className="stack">
         {items.map((req) => {
-          const subtitle = [req.artist, req.type === "artist" ? "Full discography" : null].filter(Boolean).join(" · ");
+          const subtitle = [
+            req.artist,
+            req.type === "artist" ? "Full discography" : null,
+            req.requestedBy ? `by ${req.requestedBy}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
           const isOpen = expanded === req.id;
           return (
             <div className="card" key={req.id}>

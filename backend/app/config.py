@@ -33,7 +33,9 @@ MUSICBRAINZ_USER_AGENT = os.environ.get(
     "MUSICBRAINZ_USER_AGENT", f"lidseeker/1.0 ( {MUSICBRAINZ_CONTACT} )"
 )
 
-# --- Auth (single user) ---
+# --- Auth: bootstraps the first admin ---
+# On first start these seed the initial admin account; add more users in-app
+# (Settings -> Users). Existing single-user deployments just become the admin.
 APP_USER = os.environ.get("APP_USER", "admin")
 # Two ways to set the password:
 #   APP_PASSWORD     — plaintext; hashed in-memory at startup (simplest, and safe

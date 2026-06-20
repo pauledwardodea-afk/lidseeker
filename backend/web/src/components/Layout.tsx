@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 
 export function Layout() {
-  const { logout } = useAuth();
+  const { logout, me } = useAuth();
   const nav = useNavigate();
   const onLogout = () => {
     logout();
@@ -22,6 +22,7 @@ export function Layout() {
             <NavLink to="/search">Search</NavLink>
             <NavLink to="/requests">Requests</NavLink>
             <NavLink to="/settings">Settings</NavLink>
+            {me && <span className="muted" style={{ alignSelf: "center", fontSize: 13, padding: "0 4px" }}>{me.username}</span>}
             <button className="logout" onClick={onLogout}>
               Log out
             </button>

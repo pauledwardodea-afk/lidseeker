@@ -36,7 +36,12 @@ export type MusicRequest = {
   status: string; // pending | downloading | available | failed | error
   createdAt: string;
   pipeline?: Pipeline | null;
+  requestedBy?: string | null; // username; only sent to admins
 };
+
+export type Me = { username: string; role: string };
+
+export type User = { id: number; username: string; role: string; createdAt: string };
 
 export type Track = {
   position: number;

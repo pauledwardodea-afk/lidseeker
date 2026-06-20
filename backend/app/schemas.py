@@ -60,6 +60,30 @@ class RequestOut(BaseModel):
     status: str          # pending | downloading | available | failed | error
     createdAt: str
     pipeline: Optional[Pipeline] = None
+    requestedBy: Optional[str] = None   # username; only populated for admins
+
+
+class Me(BaseModel):
+    username: str
+    role: str            # admin | user
+
+
+class User(BaseModel):
+    id: int
+    username: str
+    role: str
+    createdAt: str
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: Literal["admin", "user"] = "user"
+
+
+class PasswordChange(BaseModel):
+    currentPassword: str
+    newPassword: str
 
 
 class Track(BaseModel):

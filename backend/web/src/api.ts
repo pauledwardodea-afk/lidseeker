@@ -2,10 +2,12 @@ import type {
   ActionResult,
   AppSettings,
   DiscoverCategories,
+  Me,
   MusicRequest,
   SearchResult,
   ServiceLink,
   Track,
+  User,
 } from "./types";
 
 const TOKEN_KEY = "lidseeker_token";
@@ -111,4 +113,22 @@ export const api = {
   services: () => req<ServiceLink[]>("/services"),
 
   searchNow: () => req<ActionResult>("/search-now", { method: "POST" }),
+
+  me: () => req<Me>("/me"),
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<ActionResult>("/me/password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  users: () => req<User[]>("/users"),
+
+  createUser: (username: string, password: string, role: "admin" | "user") =>
+    req<User>("/users", {
+      method: "POST",
+      body: JSON.stringify({ username, password, role }),
+    }),
+
+  deleteUser: (id: number) => req<ActionResult>(`/users/${id}`, { method: "DELETE" }),
 };
