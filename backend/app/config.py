@@ -27,7 +27,7 @@ TRIGGER_ALBUM_SEARCH = _bool("TRIGGER_ALBUM_SEARCH", True)
 # Their API requires a descriptive User-Agent identifying the app + a contact.
 # Point MUSICBRAINZ_CONTACT at your own fork/instance when you deploy.
 MUSICBRAINZ_CONTACT = os.environ.get(
-    "MUSICBRAINZ_CONTACT", "https://github.com/your-user/lidseeker"
+    "MUSICBRAINZ_CONTACT", "https://github.com/IvoryCobra-VC/lidseeker"
 )
 MUSICBRAINZ_USER_AGENT = os.environ.get(
     "MUSICBRAINZ_USER_AGENT", f"lidseeker/1.0 ( {MUSICBRAINZ_CONTACT} )"
