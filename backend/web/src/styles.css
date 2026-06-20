@@ -1,17 +1,36 @@
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("/space-grotesk.ttf") format("truetype");
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 :root {
-  --bg: #0b1220;
-  --surface: #131c2e;
-  --surface-2: #1b2740;
-  --border: #243049;
-  --text: #e7ecf5;
-  --text-dim: #9aa7bd;
+  /* Slate surfaces (match the Android theme) */
+  --bg: #111827;        /* Slate900 — app background */
+  --surface: #1f2937;   /* Slate800 — cards, bars */
+  --surface-2: #374151; /* Slate700 — chips, inputs, dividers, placeholders */
+  --surface-low: #161f2e; /* Slate850 — app bar */
+  --border: #374151;    /* Slate700 */
+  --text: #f9fafb;      /* TextHigh */
+  --text-dim: #9ca3af;  /* TextMuted */
+
+  /* Green accent (primary) */
   --accent: #22c55e;
-  --accent-dim: #16823c;
-  --primary: #4f8cff;
+  --accent-bright: #4ade80;
+  --accent-deep: #15803d;
+  --on-accent: #04210f;
+  --primary: #22c55e;
+
+  /* Status accents */
   --danger: #ef4444;
-  --warn: #f59e0b;
-  --radius: 14px;
+  --amber: #f59e0b;     /* downloading */
+  --pending: #6b7280;
+
+  --radius: 16px;       /* cards */
+  --radius-sm: 8px;     /* inputs */
   --maxw: 880px;
+  --font: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -20,10 +39,10 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
 }
-a { color: var(--primary); text-decoration: none; }
+a { color: var(--accent-bright); text-decoration: none; }
 button { font-family: inherit; }
 
 /* ---------- Layout / nav ---------- */
@@ -31,9 +50,9 @@ button { font-family: inherit; }
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(11, 18, 32, 0.92);
+  background: rgba(17, 24, 39, 0.92);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--surface);
 }
 .appbar-inner {
   max-width: var(--maxw);
@@ -43,8 +62,8 @@ button { font-family: inherit; }
   gap: 8px;
   padding: 10px 16px;
 }
-.brand { font-weight: 800; font-size: 18px; letter-spacing: 0.3px; }
-.brand .beta { font-size: 11px; color: var(--warn); margin-left: 6px; font-weight: 700; }
+.brand { font-weight: 700; font-size: 20px; letter-spacing: 0.2px; }
+.brand .beta { font-size: 11px; color: var(--amber); margin-left: 6px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
 .nav a {
   color: var(--text-dim);
@@ -53,7 +72,7 @@ button { font-family: inherit; }
   font-size: 14px;
   font-weight: 600;
 }
-.nav a.active { color: var(--text); background: var(--surface-2); }
+.nav a.active { color: var(--on-accent); background: var(--accent); }
 .nav button.logout {
   background: none; border: none; color: var(--text-dim);
   cursor: pointer; padding: 7px 10px; font-size: 14px; font-weight: 600;
@@ -71,7 +90,7 @@ button { font-family: inherit; }
 
 .row { display: flex; align-items: center; gap: 12px; padding: 12px; }
 .row .cover {
-  width: 56px; height: 56px; border-radius: 8px; object-fit: cover;
+  width: 56px; height: 56px; border-radius: 10px; object-fit: cover;
   background: var(--surface-2); flex: none;
 }
 .row .cover.placeholder {
@@ -96,10 +115,10 @@ button { font-family: inherit; }
   font-size: 14px;
   cursor: pointer;
 }
-.btn:hover { border-color: var(--primary); }
+.btn:hover { border-color: var(--accent); }
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn.primary { background: var(--primary); border-color: var(--primary); color: #061227; }
-.btn.accent { background: var(--accent); border-color: var(--accent); color: #04210f; }
+.btn.primary, .btn.accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover, .btn.accent:hover { background: var(--accent-bright); border-color: var(--accent-bright); }
 .btn.danger { background: none; border-color: transparent; color: var(--danger); }
 .btn.small { padding: 5px 10px; font-size: 13px; }
 .btn.ghost { background: none; }
@@ -117,13 +136,13 @@ button { font-family: inherit; }
   font-weight: 600;
   cursor: pointer;
 }
-.chip.on { background: var(--primary); border-color: var(--primary); color: #061227; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 .statuschip {
   font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
 }
-.statuschip.available { background: var(--accent); color: #04210f; }
-.statuschip.downloading { background: var(--primary); color: #061227; }
+.statuschip.available { background: var(--accent); color: var(--on-accent); }
+.statuschip.downloading { background: var(--amber); color: var(--on-accent); }
 .statuschip.failed, .statuschip.error { background: var(--danger); color: #fff; }
 .statuschip.pending { background: var(--surface-2); color: var(--text-dim); }
 
@@ -133,17 +152,17 @@ button { font-family: inherit; }
   flex: 1; border: none; background: none; color: var(--text-dim);
   padding: 8px; border-radius: 999px; font-weight: 600; cursor: pointer;
 }
-.tabs button.on { background: var(--surface-2); color: var(--text); }
+.tabs button.on { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- Forms ---------- */
 .field { display: block; margin-bottom: 12px; }
 .field label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
 .input, .searchbar input {
-  width: 100%; padding: 11px 14px; border-radius: 10px;
+  width: 100%; padding: 11px 14px; border-radius: var(--radius-sm);
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
-  font-size: 15px;
+  font-size: 15px; font-family: inherit;
 }
-.input:focus, .searchbar input:focus { outline: none; border-color: var(--primary); }
+.input:focus, .searchbar input:focus { outline: none; border-color: var(--accent); }
 .searchbar { display: flex; gap: 8px; margin-bottom: 14px; }
 
 /* ---------- States ---------- */
@@ -153,7 +172,7 @@ button { font-family: inherit; }
 .state p { margin: 0 auto 14px; max-width: 360px; }
 .spinner {
   width: 28px; height: 28px; border-radius: 50%;
-  border: 3px solid var(--border); border-top-color: var(--primary);
+  border: 3px solid var(--surface-2); border-top-color: var(--accent);
   animation: spin 0.8s linear infinite; margin: 56px auto;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -168,18 +187,16 @@ button { font-family: inherit; }
   display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
   position: relative; z-index: 1;
 }
-.step.done .dot { background: var(--accent); color: #04210f; }
-.step.current .dot { background: var(--primary); color: #061227; }
+.step.done .dot, .step.current .dot { background: var(--accent); color: var(--on-accent); }
 .step .label { font-size: 11px; margin-top: 5px; color: var(--text-dim); }
 .step.done .label, .step.current .label { color: var(--text); }
 .step::before, .step::after {
-  content: ""; position: absolute; top: 11px; height: 2px; background: var(--border); z-index: 0;
+  content: ""; position: absolute; top: 11px; height: 2px; background: var(--surface-2); z-index: 0;
 }
 .step::before { left: 0; width: 50%; }
 .step::after { right: 0; width: 50%; }
 .step:first-child::before, .step:last-child::after { display: none; }
-.step.done::before, .step.done::after,
-.step.current::before { background: var(--accent); }
+.step.done::before, .step.done::after, .step.current::before { background: var(--accent); }
 
 .detail { font-size: 14px; margin: 4px 0; }
 .detail.fail { color: var(--danger); }
@@ -190,13 +207,13 @@ button { font-family: inherit; }
 
 .toast { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
 .muted { color: var(--text-dim); }
-.section-title { font-weight: 700; margin: 0 0 4px; }
+.section-title { font-weight: 600; font-size: 16px; margin: 0 0 4px; }
 
 /* dialog */
 .backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
 }
-.dialog { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; max-width: 360px; width: 100%; }
+.dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 18px; max-width: 360px; width: 100%; }
 .dialog h3 { margin: 0 0 8px; }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
