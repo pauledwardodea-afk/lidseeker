@@ -223,7 +223,7 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
 
-### Unreleased
+### v0.3.0-beta
 - **Multi-user accounts** (admin-managed) — add users in Settings → Users; requests are attributed
   per person; non-admins see only their own, admins see all. `APP_USER`/`APP_PASSWORD` now seed the
   first admin (existing single-user installs upgrade seamlessly). Web UI only this round; the Android
