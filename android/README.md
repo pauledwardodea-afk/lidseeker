@@ -9,7 +9,16 @@ This app talks **only** to the lidseeker backend (see [`../backend`](../backend)
 directly, so the Lidarr API key never leaves the server. The backend URL is entered at runtime,
 so a single build works against any server.
 
-## Build
+> 💡 The web UI is built into the backend (just open it in a browser) — the Android app is optional.
+
+## Install (recommended)
+
+**Download the latest `lidseeker-*.apk` from the
+[releases page](https://github.com/IvoryCobra-VC/lidseeker/releases)** and sideload it: copy it to
+your phone and open it, or `adb install lidseeker-*.apk`. Enable "install from unknown sources" if
+prompted. The APK is debug-signed, which is fine for personal sideloading.
+
+## Build it yourself (optional)
 
 Requires Android Studio (2024.1+) or the Android SDK + JDK 17.
 
@@ -19,17 +28,8 @@ Requires Android Studio (2024.1+) or the Android SDK + JDK 17.
 # APK at: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or open the folder in Android Studio and Run.
-
-### Release APK
-
-```bash
-./gradlew assembleRelease     # unsigned — sign with your own keystore to install
-```
-
-## Install
-
-Sideload the APK (`adb install app-debug.apk`, or copy it to the phone and open it).
+Or open the folder in Android Studio and Run. For a release build:
+`./gradlew assembleRelease` (unsigned — sign with your own keystore to install).
 
 ## First run
 

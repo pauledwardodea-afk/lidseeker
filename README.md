@@ -88,13 +88,12 @@ HTTPS URL you can use from anywhere, or just use `http://<host>:5056` on your LA
 
 ### Optional: Android app
 
-Prefer a native app? Build and sideload it (see [`android/`](android)):
+Prefer a native app? **Download the latest `lidseeker-*.apk` from the
+[releases page](https://github.com/IvoryCobra-VC/lidseeker/releases)** and sideload it (enable
+"install from unknown sources"). On first launch, enter the backend URL and your `APP_USER` /
+`APP_PASSWORD`.
 
-```bash
-cd android && ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
-```
-
-On first launch, enter the backend URL and your `APP_USER` / `APP_PASSWORD`.
+(You can also build it yourself — see [`android/`](android).)
 
 ## Recommended stack
 
