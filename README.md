@@ -20,18 +20,22 @@
 > yet. Back up the `/data` volume, and please [open an issue](https://github.com/IvoryCobra-VC/lidseeker/issues)
 > for anything you hit. Feedback welcome!
 
-Lidseeker is two parts:
+Lidseeker has:
 
-- **Backend** — a small FastAPI service that sits in front of Lidarr (a single Docker image). It handles
-  login, search, request orchestration, and live status. Your Lidarr API key never leaves the server.
-- **Android app** — a Kotlin / Jetpack Compose client. The server URL is entered at runtime, so one
-  build works against any backend.
+- **Backend + Web UI** — a FastAPI service that sits in front of Lidarr **and serves a built-in web app**,
+  all in one Docker image. Just open it in a browser. It handles login, search, request orchestration, and
+  live status; your Lidarr API key never leaves the server.
+- **Android app** *(optional)* — a Kotlin / Jetpack Compose client. The server URL is entered at runtime,
+  so one build works against any backend.
 
 ```
-┌──────────┐      ┌─────────────┐      ┌────────┐      ┌──────────────────────┐
-│ Android  │ ───► │  Lidseeker  │ ───► │ Lidarr │ ───► │   download client     │
-│   app    │ HTTP │   backend   │ HTTP │        │      │ (SABnzbd/qBit/slskd…) │
-└──────────┘      └─────────────┘      └────────┘      └──────────────────────┘
+┌──────────┐
+│ Browser  │ ─┐
+└──────────┘  │   ┌─────────────┐      ┌────────┐      ┌──────────────────────┐
+              ├─► │  Lidseeker  │ ───► │ Lidarr │ ───► │   download client     │
+┌──────────┐  │   │   backend   │ HTTP │        │      │ (SABnzbd/qBit/slskd…) │
+│ Android  │ ─┘   │  + web UI   │      └────────┘      └──────────────────────┘
+└──────────┘      └─────────────┘
 ```
 
 ## Quick start
@@ -75,11 +79,16 @@ docker compose up -d
 curl localhost:5056/api/health      # {"status":"ok"}
 ```
 
+Then open **`http://<host>:5056`** in a browser and sign in with your `APP_USER` / `APP_PASSWORD` — the
+web UI is built into the backend, nothing else to deploy.
+
 The image is multi-arch (amd64 + arm64), so it runs on x86 servers and ARM boxes (e.g. a Raspberry Pi)
 alike. Put the backend behind a reverse proxy (Caddy, nginx, Traefik, a Cloudflare Tunnel, …) for an
 HTTPS URL you can use from anywhere, or just use `http://<host>:5056` on your LAN.
 
-Finally, build and sideload the app (see [`android/`](android)):
+### Optional: Android app
+
+Prefer a native app? Build and sideload it (see [`android/`](android)):
 
 ```bash
 cd android && ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
@@ -121,6 +130,8 @@ docker compose -f docker-compose.yml -f docker-compose.soularr.yml up -d
 
 ## Features
 
+- **Built-in web UI** — a full-featured web app (Discover, Search, request pipeline, Settings) served by
+  the backend, plus an optional native Android app. Both talk to the same API.
 - **Search & request** — artists, albums, and individual songs (MusicBrainz metadata via Lidarr). Tap
   **Request** and Lidseeker adds + monitors it in Lidarr and kicks off a search.
 - **Live request pipeline** — every request shows a 5-stage tracker (requested → searching → downloading →
@@ -192,6 +203,10 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 ## Changelog
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
+
+### Unreleased
+- **Built-in web UI** (React/Vite) served by the backend at `/` — full parity with the app (Discover,
+  Search, artist detail, request pipeline with retry/remove, Settings). No extra container.
 
 ### v0.1.1-beta
 - Backend image now published at `ghcr.io/ivorycobra-vc/lidseeker` (updated registry namespace).

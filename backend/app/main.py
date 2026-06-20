@@ -1,12 +1,14 @@
 """lidseeker — a music request backend (the 'seerr' for Lidarr)."""
 import asyncio
 import logging
+import os
 from typing import Optional
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import auth, config, db, lidarr, notify, slskd, soularr_cfg, soularr_ctl
 from .schemas import (
@@ -422,3 +424,25 @@ def _to_out(row: dict, pipeline: dict | None = None) -> dict:
         "createdAt": row["created_at"],
         "pipeline": pipeline,
     }
+
+
+# --------------------------------------------------------------------------
+# Web UI (the built SPA). Registered LAST so every /api route + /docs win.
+# --------------------------------------------------------------------------
+_WEB_DIR = os.path.join(os.path.dirname(__file__), "..", "web")
+if os.path.isdir(_WEB_DIR):
+    _assets = os.path.join(_WEB_DIR, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def _spa(full_path: str) -> FileResponse:
+        # Unknown /api paths stay JSON 404s, not the HTML shell.
+        if full_path.startswith("api/") or full_path in ("api", "docs", "openapi.json", "redoc"):
+            raise HTTPException(404, "Not found")
+        # Serve a real file (favicon, etc.) if present, else the SPA shell so
+        # client-side routes like /requests load correctly on a hard refresh.
+        candidate = os.path.normpath(os.path.join(_WEB_DIR, full_path))
+        if full_path and candidate.startswith(os.path.abspath(_WEB_DIR)) and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(_WEB_DIR, "index.html"))

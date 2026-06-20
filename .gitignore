@@ -7,6 +7,10 @@ __pycache__/
 *.pyc
 backend/data/
 
+# Web UI build artifacts
+backend/web/node_modules/
+backend/web/dist/
+
 # Android / Gradle
 android/build/
 android/app/build/
