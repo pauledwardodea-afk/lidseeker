@@ -38,6 +38,24 @@ Lidseeker has:
 └──────────┘      └─────────────┘
 ```
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/discover.png" width="220" alt="Discover" />
+  <img src="docs/screenshots/search.png" width="220" alt="Search" />
+  <img src="docs/screenshots/artist.png" width="220" alt="Artist detail" />
+  <img src="docs/screenshots/requests.png" width="220" alt="Live request pipeline" />
+</p>
+
+<details>
+<summary>More screenshots</summary>
+
+<p align="center">
+  <img src="docs/screenshots/login.png" width="220" alt="Login" />
+  <img src="docs/screenshots/settings.png" width="220" alt="Settings" />
+</p>
+</details>
+
 ## Quick start
 
 **Prerequisites:** Docker, and a running **Lidarr** instance with an API key and at least one
