@@ -1,0 +1,54 @@
+name: Release
+
+# Push a version tag and this builds the Android APK and publishes a GitHub
+# Release with it attached. (The Docker image for the tag is built separately by
+# docker-publish.yml.) Example:
+#   git tag v0.3.0-beta && git push origin v0.3.0-beta
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          sed -i "s/versionName = \".*\"/versionName = \"${VERSION}\"/" android/app/build.gradle.kts
+          sed -i "s/versionCode = .*/versionCode = ${{ github.run_number }}/" android/app/build.gradle.kts
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "lidseeker-${GITHUB_REF_NAME}.apk"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: lidseeker-${{ github.ref_name }}.apk
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          body: |
+            Lidseeker ${{ github.ref_name }}.
+
+            **Backend image:** `ghcr.io/ivorycobra-vc/lidseeker:${{ github.ref_name }}`
+            (or `:latest`). See the [README](https://github.com/IvoryCobra-VC/lidseeker#quick-start).
+
+            **Android app:** download `lidseeker-${{ github.ref_name }}.apk` below and sideload it.

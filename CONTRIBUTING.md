@@ -51,6 +51,19 @@ cd android && ./gradlew assembleDebug
 - Add or update a test when you change backend behaviour.
 - Keep PRs focused, and describe what changed and why.
 
+## Releasing
+
+Releases are automated — just push a version tag:
+
+```bash
+git tag v0.3.0-beta && git push origin v0.3.0-beta
+```
+
+That triggers two workflows: `docker-publish.yml` builds and pushes the multi-arch backend image
+(`ghcr.io/ivorycobra-vc/lidseeker:<tag>`), and `release.yml` builds the Android APK (versioned from
+the tag) and publishes a GitHub Release with it attached. Tags containing a `-` (e.g. `-beta`) are
+marked as pre-releases.
+
 ## Reporting bugs / requesting features
 
 Open an issue with the templates provided. For anything security-sensitive, see
