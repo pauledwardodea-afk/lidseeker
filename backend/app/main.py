@@ -3,6 +3,7 @@ import asyncio
 import logging
 import mimetypes
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -180,11 +181,38 @@ async def health() -> JSONResponse:
 # --------------------------------------------------------------------------
 # Auth
 # --------------------------------------------------------------------------
+# --- Login brute-force limiter (in-process; counts FAILURES only) ---
+_LOGIN_MAX_FAILURES = 10
+_LOGIN_WINDOW_SECONDS = 300
+# {client_ip: [failure_timestamps]}
+_login_failures: dict[str, list[float]] = {}
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _login_blocked(ip: str) -> bool:
+    now = time.monotonic()
+    recent = [t for t in _login_failures.get(ip, []) if now - t < _LOGIN_WINDOW_SECONDS]
+    _login_failures[ip] = recent
+    return len(recent) >= _LOGIN_MAX_FAILURES
+
+
+def _record_login_failure(ip: str) -> None:
+    _login_failures.setdefault(ip, []).append(time.monotonic())
+
+
 @app.post("/api/auth/login", response_model=TokenOut)
-async def login(body: LoginIn) -> TokenOut:
+async def login(body: LoginIn, request: Request) -> TokenOut:
+    ip = _client_ip(request)
+    if _login_blocked(ip):
+        raise HTTPException(429, "Too many failed logins. Try again in a few minutes.")
     user = auth.verify_credentials(body.username, body.password)
     if not user:
+        _record_login_failure(ip)
         raise HTTPException(401, "Invalid credentials")
+    _login_failures.pop(ip, None)   # clear the counter on success
     return TokenOut(token=auth.issue_token(user))
 
 
@@ -192,7 +220,7 @@ _MIN_PASSWORD_LEN = 8
 
 
 def _hash(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
 
 
 def _validate_password(password: str) -> None:

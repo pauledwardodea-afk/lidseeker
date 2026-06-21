@@ -1,5 +1,9 @@
 """Environment-driven settings for the lidseeker backend."""
+import logging
 import os
+import secrets
+
+log = logging.getLogger("lidseeker")
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -48,8 +52,45 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 APP_PASS_HASH = os.environ.get("APP_PASS_HASH", "")
 if not APP_PASS_HASH and APP_PASSWORD:
     import bcrypt
-    APP_PASS_HASH = bcrypt.hashpw(APP_PASSWORD.encode(), bcrypt.gensalt()).decode()
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me")
+    APP_PASS_HASH = bcrypt.hashpw(APP_PASSWORD.encode(), bcrypt.gensalt(rounds=12)).decode()
+def _resolve_jwt_secret() -> str:
+    """The JWT signing secret. If the operator set a real one, use it. Otherwise
+    (unset, empty, or the placeholder) generate a random secret once and PERSIST
+    it next to the database so it survives restarts — a baked-in default would let
+    anyone forge admin tokens against a default install, and a per-boot random one
+    would sign everyone out on every restart."""
+    env = os.environ.get("JWT_SECRET", "")
+    if env and env != "change-me":
+        return env
+    data_dir = os.path.dirname(os.environ.get("DB_PATH", "/data/lidseeker.db")) or "."
+    secret_path = os.path.join(data_dir, ".jwt_secret")
+    try:
+        with open(secret_path) as f:
+            existing = f.read().strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+    secret = secrets.token_hex(32)
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+        # Write 0600 so other users on the host can't read the signing key.
+        fd = os.open(secret_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(secret)
+        log.info(
+            "JWT_SECRET not set — generated and persisted a random secret at %s. "
+            "Set JWT_SECRET explicitly if you run multiple instances.", secret_path
+        )
+    except OSError as e:
+        # Can't persist (read-only data dir?) — fall back to an in-memory secret
+        # so we still don't use the public placeholder. Tokens won't survive a
+        # restart in this case.
+        log.warning("couldn't persist generated JWT secret (%s); using a per-process one", e)
+    return secret
+
+
+JWT_SECRET = _resolve_jwt_secret()
 JWT_TTL_HOURS = int(os.environ.get("JWT_TTL_HOURS", "48"))  # 2 days
 
 # --- slskd (Soulseek daemon — for live download progress in the request pipeline) ---

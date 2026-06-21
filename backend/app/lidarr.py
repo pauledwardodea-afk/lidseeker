@@ -223,6 +223,8 @@ async def search_tracks(term: str, limit: int = 25) -> list[dict]:
 
 
 # A release-group's tracklist never changes, so cache it for the process life.
+# Bounded so a long-running server browsing many albums can't grow it forever.
+_TRACKLIST_CACHE_MAX = 512
 _tracklist_cache: dict[str, list[dict]] = {}
 
 
@@ -269,6 +271,8 @@ async def album_tracks(foreign_album_id: str) -> list[dict]:
                 "durationMs": int(length) if length else None,
                 "mediumNumber": medium_no,
             })
+    if len(_tracklist_cache) >= _TRACKLIST_CACHE_MAX:
+        del _tracklist_cache[next(iter(_tracklist_cache))]
     _tracklist_cache[foreign_album_id] = out
     return out
 
@@ -765,6 +769,7 @@ PIPELINE_STAGES = ["requested", "searching", "downloading", "importing", "availa
 # the same album in one /api/requests pass, and the list is polled every few
 # seconds, so a 3s TTL collapses the duplicate fetches without showing stale data.
 _ALBUM_TTL = 3.0
+_ALBUM_CACHE_MAX = 512
 _album_cache: dict[int, tuple[float, dict]] = {}
 
 
@@ -777,6 +782,12 @@ async def _get_album(album_id: int) -> dict:
         r = await c.get(f"/album/{album_id}")
         r.raise_for_status()
         data = r.json()
+    # Bound growth: drop expired entries, then the oldest if still over cap.
+    if len(_album_cache) >= _ALBUM_CACHE_MAX:
+        for k in [k for k, (ts, _) in _album_cache.items() if now - ts >= _ALBUM_TTL]:
+            del _album_cache[k]
+        while len(_album_cache) >= _ALBUM_CACHE_MAX:
+            del _album_cache[next(iter(_album_cache))]
     _album_cache[album_id] = (now, data)
     return data
 
