@@ -12,8 +12,8 @@ android {
         applicationId = "com.lidseeker.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.3.1-beta"
+        versionCode = 5
+        versionName = "0.3.2-beta"
         vectorDrawables { useSupportLibrary = true }
     }
 
