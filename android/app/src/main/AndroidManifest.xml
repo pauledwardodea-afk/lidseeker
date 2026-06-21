@@ -3,9 +3,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      allowBackup=false: this app holds a bearer token; don't let it (or the
+      server URL) sync into cloud backups.
+      usesCleartextTraffic=true: self-hosted servers are commonly reached over
+      plain http:// on a LAN or Tailscale, so cleartext stays permitted. (Android's
+      network-security-config can't scope cleartext to private IP ranges — <domain>
+      takes hostnames, not CIDRs — so there's no way to allow LAN http while
+      blocking it elsewhere.)
+    -->
     <application
         android:name=".LidseekerApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

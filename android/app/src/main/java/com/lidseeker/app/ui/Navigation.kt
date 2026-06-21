@@ -86,6 +86,16 @@ fun AppRoot() {
         }
     }
 
+    // Server rejected our token (expired/revoked) anywhere in the app → log out.
+    LaunchedEffect(Unit) {
+        repo.authExpired.collect {
+            repo.logout()
+            if (nav.currentDestination?.route != Routes.LOGIN) {
+                nav.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
+            }
+        }
+    }
+
     NavHost(navController = nav, startDestination = start) {
         composable(Routes.LOGIN) {
             LoginScreen(onLoggedIn = {

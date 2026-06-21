@@ -16,9 +16,13 @@ data class ConnConfig(val baseUrl: String, val token: String)
 object ApiClient {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun create(configProvider: () -> ConnConfig): ApiService {
+    fun create(
+        configProvider: () -> ConnConfig,
+        onUnauthorized: () -> Unit = {},
+    ): ApiService {
         val client = OkHttpClient.Builder()
             .addInterceptor(DynamicHostInterceptor(configProvider))
+            .addInterceptor(UnauthorizedInterceptor(onUnauthorized))
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(40, TimeUnit.SECONDS)   // /request may add an artist + wait
             .build()
@@ -53,5 +57,22 @@ private class DynamicHostInterceptor(
             request = builder.build()
         }
         return chain.proceed(request)
+    }
+}
+
+/**
+ * Centralised auth-expiry handling: any 401 (except on the login call itself,
+ * where a 401 is just bad credentials) fires [onUnauthorized] so the app can drop
+ * the token and bounce to Login, instead of every screen showing a stuck error.
+ */
+private class UnauthorizedInterceptor(
+    private val onUnauthorized: () -> Unit,
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val response = chain.proceed(chain.request())
+        if (response.code == 401 && !chain.request().url.encodedPath.endsWith("/auth/login")) {
+            onUnauthorized()
+        }
+        return response
     }
 }

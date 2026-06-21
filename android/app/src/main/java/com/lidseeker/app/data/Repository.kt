@@ -1,5 +1,7 @@
 package com.lidseeker.app.data
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.first
 
 /**
@@ -11,7 +13,19 @@ class Repository(private val settings: Settings) {
     @Volatile private var baseUrl: String = ""
     @Volatile private var token: String = ""
 
-    private val api: ApiService = ApiClient.create { ConnConfig(baseUrl, token) }
+    // Emits when the server rejects our token (401) so the UI can bounce to Login.
+    private val _authExpired = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val authExpired: SharedFlow<Unit> = _authExpired
+
+    private val api: ApiService = ApiClient.create(
+        configProvider = { ConnConfig(baseUrl, token) },
+        onUnauthorized = {
+            // Runs on an OkHttp thread: drop the in-memory token immediately and
+            // signal the UI (which clears the persisted token + navigates).
+            token = ""
+            _authExpired.tryEmit(Unit)
+        },
+    )
 
     /** Load persisted config once at startup. */
     suspend fun bootstrap() {

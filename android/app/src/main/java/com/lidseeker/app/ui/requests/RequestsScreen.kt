@@ -2,6 +2,7 @@ package com.lidseeker.app.ui.requests
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,9 +31,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lidseeker.app.data.MusicRequest
@@ -61,12 +68,22 @@ class RequestsViewModel(private val repo: Repository) : ViewModel() {
         private set
     var retryingId by mutableStateOf<Int?>(null)
         private set
+    // Transient feedback for retry/remove (shown in a snackbar), so a failed
+    // action isn't a silent no-op.
+    var actionMessage by mutableStateOf<String?>(null)
+        private set
+
+    fun consumeActionMessage() { actionMessage = null }
 
     fun retry(id: Int) {
         if (retryingId != null) return
         retryingId = id
         viewModelScope.launch {
-            try { repo.retryRequest(id) } catch (_: Exception) {}
+            actionMessage = try {
+                repo.retryRequest(id).message ?: "Retrying…"
+            } catch (e: Exception) {
+                "Couldn't retry: ${e.message ?: "try again"}"
+            }
             retryingId = null
             refresh()
         }
@@ -74,7 +91,11 @@ class RequestsViewModel(private val repo: Repository) : ViewModel() {
 
     fun remove(id: Int) {
         viewModelScope.launch {
-            try { repo.deleteRequest(id) } catch (_: Exception) {}
+            actionMessage = try {
+                repo.deleteRequest(id).message ?: "Removed."
+            } catch (e: Exception) {
+                "Couldn't remove: ${e.message ?: "try again"}"
+            }
             refresh()
         }
     }
@@ -123,54 +144,72 @@ class RequestsViewModel(private val repo: Repository) : ViewModel() {
 @Composable
 fun RequestsScreen(modifier: Modifier = Modifier) {
     val vm: RequestsViewModel = viewModel(factory = repoFactory { RequestsViewModel(it) })
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // Initial load, then poll so statuses advance pending -> downloading -> available.
+    // Initial load once.
     LaunchedEffect(Unit) {
         vm.loadServices()
         vm.refresh(initial = true)
-        while (true) {
-            delay(8_000)
-            vm.refresh()
+    }
+    // Poll only while the screen is actually visible — pauses when backgrounded
+    // or navigated away, instead of draining battery/network forever.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(8_000)
+                vm.refresh()
+            }
+        }
+    }
+    // Show transient retry/remove feedback.
+    LaunchedEffect(vm.actionMessage) {
+        vm.actionMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            vm.consumeActionMessage()
         }
     }
 
-    when {
-        vm.loading -> LoadingState(modifier)
-        vm.error != null && vm.items.isEmpty() -> FullScreenState(
-            icon = Icons.Filled.CloudOff,
-            title = "Couldn't load requests",
-            message = vm.error,
-            iconTint = MaterialTheme.colorScheme.error,
-            actionLabel = "Try again",
-            onAction = { vm.refresh(initial = true) },
-            modifier = modifier,
-        )
-        vm.items.isEmpty() -> FullScreenState(
-            icon = Icons.Filled.Inbox,
-            title = "No requests yet",
-            message = "Albums and artists you request will appear here, with live download status.",
-            modifier = modifier,
-        )
-        else -> PullToRefresh(onRefresh = { vm.refreshNow() }, modifier = modifier) {
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(vm.items, key = { it.id }) { req ->
-                    RequestRow(
-                        req = req,
-                        services = vm.services,
-                        forcing = vm.forcing,
-                        forceMessage = vm.forceMessage,
-                        onForceSearch = vm::forceSearch,
-                        retrying = vm.retryingId == req.id,
-                        onRetry = { vm.retry(req.id) },
-                        onRemove = { vm.remove(req.id) },
-                    )
+    Box(modifier) {
+        when {
+            vm.loading -> LoadingState(Modifier.fillMaxSize())
+            vm.error != null && vm.items.isEmpty() -> FullScreenState(
+                icon = Icons.Filled.CloudOff,
+                title = "Couldn't load requests",
+                message = vm.error,
+                iconTint = MaterialTheme.colorScheme.error,
+                actionLabel = "Try again",
+                onAction = { vm.refresh(initial = true) },
+                modifier = Modifier.fillMaxSize(),
+            )
+            vm.items.isEmpty() -> FullScreenState(
+                icon = Icons.Filled.Inbox,
+                title = "No requests yet",
+                message = "Albums and artists you request will appear here, with live download status.",
+                modifier = Modifier.fillMaxSize(),
+            )
+            else -> PullToRefresh(onRefresh = { vm.refreshNow() }, modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(vm.items, key = { it.id }) { req ->
+                        RequestRow(
+                            req = req,
+                            services = vm.services,
+                            forcing = vm.forcing,
+                            forceMessage = vm.forceMessage,
+                            onForceSearch = vm::forceSearch,
+                            retrying = vm.retryingId == req.id,
+                            onRetry = { vm.retry(req.id) },
+                            onRemove = { vm.remove(req.id) },
+                        )
+                    }
                 }
             }
         }
+        SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
     }
 }
 
