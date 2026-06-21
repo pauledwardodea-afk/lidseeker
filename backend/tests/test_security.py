@@ -2,7 +2,7 @@
 proxy-aware client IP, and the security response headers."""
 from fastapi.testclient import TestClient
 
-from app import config, ratelimit
+from app import config
 from app.ratelimit import SlidingWindowLimiter, client_ip
 
 
@@ -33,8 +33,9 @@ def test_client_ip_respects_trust_proxy(monkeypatch):
 
 def test_security_headers_and_login_rate_limit(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "sec.db"))
-    monkeypatch.setattr(ratelimit, "login_limiter", SlidingWindowLimiter(2, 300))
     from app import main
+    monkeypatch.setattr(main, "_LOGIN_MAX_FAILURES", 2)
+    main._login_failures.clear()
 
     with TestClient(main.app) as client:
         r = client.get("/api/health")

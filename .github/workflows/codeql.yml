@@ -1,8 +1,13 @@
 name: CodeQL
 
-# Static analysis for the three codebases in this repo. Uses CodeQL's buildless
-# analysis (build-mode: none) for every language so no Gradle/npm build is needed
-# — fast and robust. Results land in the repo's Security -> Code scanning tab.
+# Static analysis for the internet-facing codebases: the backend (Python) and
+# the web UI (JS/TS). Uses CodeQL's buildless analysis (build-mode: none) so no
+# build is needed — fast and robust. Results land in Security -> Code scanning.
+#
+# The Android app (java-kotlin) is intentionally omitted: CodeQL can't analyze
+# Kotlin buildlessly yet, so it would need the full Android Gradle/SDK toolchain
+# wired in just to scan a client that only talks to the (scanned) backend. Add a
+# java-kotlin entry with a manual Gradle build later if it's worth the CI cost.
 on:
   push:
     branches: [master]
@@ -26,8 +31,6 @@ jobs:
           - language: python                  # backend/
             build-mode: none
           - language: javascript-typescript   # backend/web/
-            build-mode: none
-          - language: java-kotlin             # android/
             build-mode: none
     steps:
       - name: Checkout
