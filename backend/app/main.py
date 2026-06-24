@@ -215,6 +215,7 @@ _LOGIN_MAX_FAILURES = 10
 _LOGIN_WINDOW_SECONDS = 300
 # {client_ip: [failure_timestamps]}
 _login_failures: dict[str, list[float]] = {}
+_login_attempt_counter = 0
 
 
 def _client_ip(request: Request) -> str:
@@ -222,14 +223,70 @@ def _client_ip(request: Request) -> str:
 
 
 def _login_blocked(ip: str) -> bool:
+    global _login_attempt_counter
     now = time.monotonic()
     recent = [t for t in _login_failures.get(ip, []) if now - t < _LOGIN_WINDOW_SECONDS]
-    _login_failures[ip] = recent
+    if recent:
+        _login_failures[ip] = recent
+    else:
+        _login_failures.pop(ip, None)  # prune empty entries immediately
+    # Periodic full sweep so IPs that never return don't leak memory.
+    _login_attempt_counter += 1
+    if _login_attempt_counter % 100 == 0:
+        _prune_login_failures(now)
     return len(recent) >= _LOGIN_MAX_FAILURES
+
+
+def _prune_login_failures(now: float) -> None:
+    """Drop entries that are entirely outside the window."""
+    stale = [
+        ip for ip, stamps in _login_failures.items()
+        if not any(now - t < _LOGIN_WINDOW_SECONDS for t in stamps)
+    ]
+    for ip in stale:
+        _login_failures.pop(ip, None)
 
 
 def _record_login_failure(ip: str) -> None:
     _login_failures.setdefault(ip, []).append(time.monotonic())
+
+
+# --------------------------------------------------------------------------
+# Rate limiter — protects external APIs (MusicBrainz: ~1 req/s, Lidarr: finite)
+# --------------------------------------------------------------------------
+class _RateLimiter:
+    """Simple sliding-window rate limiter, per-IP, per-endpoint class."""
+
+    def __init__(self, max_requests: int, window_seconds: float):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._buckets: dict[str, list[float]] = {}
+        self._hits = 0
+
+    async def __call__(self, request: Request) -> None:
+        ip = _client_ip(request)
+        now = time.monotonic()
+        stamps = self._buckets.get(ip, [])
+        recent = [t for t in stamps if now - t < self.window_seconds]
+        if len(recent) >= self.max_requests:
+            raise HTTPException(429, "Too many requests. Please wait a moment.")
+        recent.append(now)
+        self._buckets[ip] = recent
+        # Periodic full sweep so the dict doesn't grow unbounded.
+        self._hits += 1
+        if self._hits % 200 == 0:
+            stale = [
+                k for k, v in self._buckets.items()
+                if not any(now - t < self.window_seconds for t in v)
+            ]
+            for k in stale:
+                self._buckets.pop(k, None)
+
+
+# MusicBrainz asks for ~1 req/s; allow bursts but cap sustained rate.
+_rate_limit_search = _RateLimiter(max_requests=20, window_seconds=10)
+_rate_limit_discover = _RateLimiter(max_requests=30, window_seconds=10)
+_rate_limit_tracklist = _RateLimiter(max_requests=30, window_seconds=10)
 
 
 @app.post("/api/auth/login", response_model=TokenOut)
@@ -324,6 +381,7 @@ async def search(
     term: str = Query(..., min_length=1),
     type: str = Query("album", pattern="^(artist|album|track)$"),
     _user: auth.CurrentUser = Depends(auth.require_user),
+    _rl: None = Depends(_rate_limit_search),
 ) -> list[dict]:
     if type == "track":
         return await lidarr.search_tracks(term)
@@ -332,14 +390,16 @@ async def search(
 
 @app.get("/api/artist/{foreign_id}/albums", response_model=list[SearchResult])
 async def artist_albums(
-    foreign_id: str, _user: auth.CurrentUser = Depends(auth.require_user)
+    foreign_id: str, _user: auth.CurrentUser = Depends(auth.require_user),
+    _rl: None = Depends(_rate_limit_search),
 ) -> list[dict]:
     return await lidarr.artist_albums(foreign_id)
 
 
 @app.get("/api/album/{foreign_id}/tracks", response_model=list[Track])
 async def album_tracks(
-    foreign_id: str, _user: auth.CurrentUser = Depends(auth.require_user)
+    foreign_id: str, _user: auth.CurrentUser = Depends(auth.require_user),
+    _rl: None = Depends(_rate_limit_tracklist),
 ) -> list[dict]:
     """Tracklist for an album (for the expandable song view)."""
     return await lidarr.album_tracks(foreign_id)
@@ -522,6 +582,7 @@ async def discover_categories(
     genre: Optional[str] = Query(None),
     decade: Optional[int] = Query(None),
     _user: auth.CurrentUser = Depends(auth.require_user),
+    _rl: None = Depends(_rate_limit_discover),
 ) -> dict:
     """Genre + decade chips for the Discover tab, each conditioned on the other
     active filter so the chips only offer combinations that have results."""
@@ -533,6 +594,7 @@ async def discover(
     genre: Optional[str] = Query(None),
     decade: Optional[int] = Query(None),
     _user: auth.CurrentUser = Depends(auth.require_user),
+    _rl: None = Depends(_rate_limit_discover),
 ) -> list[dict]:
     """Unowned releases from artists in your library. No filter → newest first;
     a `genre` or `decade` browses that category instead."""

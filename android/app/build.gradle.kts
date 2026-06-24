@@ -20,6 +20,11 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Signed with the debug keystore so anyone can build a release APK
+            // from source without a private key. The APK is distributed via
+            // GitHub Releases; sideloaders should verify the artifact against
+            // the published SHA256 checksums.
+            signingConfig = signingConfigs.debug
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

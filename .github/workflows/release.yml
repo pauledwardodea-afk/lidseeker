@@ -30,14 +30,14 @@ jobs:
           sed -i "s/versionName = \".*\"/versionName = \"${VERSION}\"/" android/app/build.gradle.kts
           sed -i "s/versionCode = .*/versionCode = ${{ github.run_number }}/" android/app/build.gradle.kts
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Stage APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk "lidseeker-${GITHUB_REF_NAME}.apk"
+        run: cp android/app/build/outputs/apk/release/app-release.apk "lidseeker-${GITHUB_REF_NAME}.apk"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

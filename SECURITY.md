@@ -1,7 +1,7 @@
 # Security Policy
 
-Lidseeker is **beta** software. It's a single-user, self-hosted app that holds your Lidarr API key
-and a login credential, so please treat security reports seriously.
+Lidseeker is **beta** software. It's a self-hosted app that holds your Lidarr API key and user
+credentials, so please treat security reports seriously.
 
 ## Supported versions
 

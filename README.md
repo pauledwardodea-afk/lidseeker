@@ -16,9 +16,9 @@
 
 > [!WARNING]
 > **Lidseeker is in beta.** It works and is in daily use, but it's early software — expect rough edges
-> and the occasional breaking change, it's **single-user** only, and there are no screenshots or logo
-> yet. Back up the `/data` volume, and please [open an issue](https://github.com/IvoryCobra-VC/lidseeker/issues)
-> for anything you hit. Feedback welcome!
+> and the occasional breaking change. There are no logo yet. Back up the `/data` volume, and please
+> [open an issue](https://github.com/IvoryCobra-VC/lidseeker/issues) for anything you hit. Feedback
+> welcome!
 
 Lidseeker has:
 
