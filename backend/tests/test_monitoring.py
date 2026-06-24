@@ -3,7 +3,7 @@ only the requested album, pagination works, and the request_album flow
 leaves the rest of the discography alone."""
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app import lidarr
 
