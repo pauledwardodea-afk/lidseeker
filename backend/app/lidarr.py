@@ -508,10 +508,26 @@ async def add_artist(lookup_artist: dict, monitor: str, search_missing: bool) ->
 
 
 async def _albums_for_artist_id(artist_id: int) -> list[dict]:
-    async with _client() as c:
-        r = await c.get("/album", params={"artistId": artist_id})
-        r.raise_for_status()
-        return r.json()
+    """Return EVERY album for an artist, paginating through Lidarr's API.
+    The default page size is small (~15) — without pagination we'd silently
+    miss albums for artists with large discographies."""
+    all_albums: list[dict] = []
+    page = 1
+    page_size = 100
+    while True:
+        async with _client() as c:
+            r = await c.get("/album", params={
+                "artistId": artist_id, "page": page, "pageSize": page_size,
+            })
+            r.raise_for_status()
+            page_data = r.json()
+        if not page_data:
+            break
+        all_albums.extend(page_data)
+        if len(page_data) < page_size:
+            break
+        page += 1
+    return all_albums
 
 
 async def _wait_for_album(artist_id: int, foreign_album_id: str,
@@ -589,46 +605,29 @@ async def _get_album(album_id: int) -> dict:
 
 
 async def _monitor_album(artist_id: int, album_id: int) -> bool:
-    """Monitor exactly one album for download and make it STICK — even for a
-    brand-new artist — without ever grabbing the rest of the discography.
-    (Sequence validated live against the real Lidarr.)
+    """Monitor exactly one album and build its track list WITHOUT touching any
+    other albums on the artist. Safe for artists with a huge, carefully curated
+    discography — only the target album is ever monitored or refreshed.
 
     The trap: Lidarr only builds an album's track list while that album is
-    monitored, but just after an artist is added its albums are "new", so a
-    RefreshArtist applies monitorNewItems="none" and un-monitors whatever we
-    just monitored — leaving 0 tracks, so Soularr never sees it as wanted.
-
-    So we decouple "build track lists" from "what to download":
-      1. switch the ARTIST OFF — while off, none of its albums are "wanted",
-         so nothing can leak to Soularr no matter what we monitor;
-      2. monitor ALL its albums and run a blocking refresh — every track list
-         materialises;
-      3. un-monitor everything except the album(s) we actually want (the new
-         target plus any already-monitored albums from earlier requests);
-      4. switch the artist ON — now only those albums are monitored + missing.
-    By step 4 the albums are no longer "new", so later refreshes don't revert
-    them.
+    monitored, but with monitorNewItems="none" a RefreshArtist un-monitors a
+    "new" album. So we:
+      1. Monitor just the target album.
+      2. Blocking RefreshArtist → builds its track list (may un-monitor it).
+      3. Re-monitor — now it's no longer "new", so it sticks.
     """
-    existing = await _albums_for_artist_id(artist_id)
-    all_ids = [a["id"] for a in existing]
-    # Keep albums already monitored (earlier requests) plus our new target.
-    keep = {a["id"] for a in existing if a.get("monitored")}
-    keep.add(album_id)
+    # 1) Monitor just the one album we want — nothing else.
+    await set_album_monitored([album_id], True)
 
-    # 1) artist OFF so nothing is "wanted" while we build track lists
-    await set_artist_monitored(artist_id, False)
-    # 2) monitor everything + blocking refresh so all track lists materialise
-    if all_ids:
-        await set_album_monitored(all_ids, True)
+    # 2) Refresh to build its track list (blocking — wait for completion).
     await refresh_artist(artist_id)
-    # 3) trim back to just the album(s) we want
-    drop = [i for i in all_ids if i not in keep]
-    if drop:
-        await set_album_monitored(drop, False)
-    await set_album_monitored(list(keep), True)
-    # 4) artist ON — only the kept album(s) are now monitored + missing
-    await set_artist_monitored(artist_id, True)
 
+    # 3) Re-assert: RefreshArtist with monitorNewItems="none" un-monitors
+    #    albums that are still "new". Now that we've refreshed, the album is
+    #    no longer "new" and this second monitor call sticks permanently.
+    await set_album_monitored([album_id], True)
+
+    # Verify: the album should now be monitored with a populated track list.
     album = await _get_album(album_id)
     tracks = (album.get("statistics") or {}).get("trackCount") or 0
     return bool(album.get("monitored") and tracks > 0)
@@ -659,7 +658,9 @@ async def ensure_album_monitored(artist_id: int, album_id: int) -> bool:
                     return True
         except httpx.HTTPError:
             return False
-    # Reverted (un-monitored or tracks purged) — re-apply the proven sequence.
+    # Reverted (un-monitored, tracks purged, or artist flipped off).
+    # Re-apply: ensure the artist is ON, then monitor just this one album.
+    await set_artist_monitored(artist_id, True)
     return await _monitor_album(artist_id, album_id)
 
 
@@ -668,7 +669,10 @@ async def ensure_album_monitored(artist_id: int, album_id: int) -> bool:
 # --------------------------------------------------------------------------
 async def request_album(foreign_album_id: str) -> dict:
     """Ensure the album's artist exists, monitor the album, trigger search.
-    Returns {lidarr_artist_id, lidarr_album_id, title, artist, imageUrl}."""
+    Returns {lidarr_artist_id, lidarr_album_id, title, artist, imageUrl}.
+
+    Never touches albums other than the one requested — safe for artists with
+    a large or carefully curated discography."""
     info = await lookup_album_by_id(foreign_album_id)
     if not info:
         raise ValueError("Album not found in Lidarr metadata")
@@ -678,6 +682,13 @@ async def request_album(foreign_album_id: str) -> dict:
     existing = await find_library_artist(foreign_artist_id)
     if existing:
         artist_id = existing["id"]
+        # Lidarr only includes albums of *monitored* artists in its
+        # wanted/missing list (the pool Soularr reads). If the user had the
+        # artist unmonitored (e.g. after carefully curating what to grab),
+        # we must flip it ON so the newly-requested album is eligible.
+        # set_artist_monitored is a plain PUT — it toggles only the top-level
+        # flag; per-album monitoring is left untouched.
+        await set_artist_monitored(artist_id, True)
     else:
         created = await add_artist(artist, monitor="none", search_missing=False)
         artist_id = created["id"]
@@ -685,9 +696,6 @@ async def request_album(foreign_album_id: str) -> dict:
     album = await _wait_for_album(artist_id, foreign_album_id)
     album_id = album["id"] if album else None
     if album_id:
-        # Monitor ONLY the requested album (and its artist) and make it stick
-        # through the async refresh — same robust path for new and existing
-        # artists. Never monitors the rest of the discography.
         if not await _monitor_album(artist_id, album_id):
             raise RuntimeError(
                 "Couldn't get Lidarr to monitor this album (its tracks never "
