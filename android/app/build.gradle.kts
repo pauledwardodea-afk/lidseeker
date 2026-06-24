@@ -24,7 +24,7 @@ android {
             // from source without a private key. The APK is distributed via
             // GitHub Releases; sideloaders should verify the artifact against
             // the published SHA256 checksums.
-            signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

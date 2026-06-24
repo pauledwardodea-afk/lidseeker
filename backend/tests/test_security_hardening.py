@@ -125,12 +125,15 @@ def test_is_denylisted_reads_cleanly(tmp_path, monkeypatch):
 
 def test_login_limiter_prunes_stale_entries():
     """Entries for IPs that never return are cleaned up, not leaked."""
+    import time as _time
     main._login_failures.clear()
     main._login_attempt_counter = 0
-    # Insert a stale entry directly (timestamp well outside the window).
-    main._login_failures["10.0.0.1"] = [1.0]  # ancient
-    main._login_failures["10.0.0.2"] = [1.0, 2.0]  # ancient
-    main._login_failures["10.0.0.3"] = [float("inf")]  # still fresh (won't age out)
+    now = _time.monotonic()
+    # Insert stale entries (well outside the window relative to now).
+    stale_ts = now - main._LOGIN_WINDOW_SECONDS - 60
+    main._login_failures["10.0.0.1"] = [stale_ts]
+    main._login_failures["10.0.0.2"] = [stale_ts, stale_ts + 1]
+    main._login_failures["10.0.0.3"] = [now + 9999]  # still fresh (won't age out)
     # Trigger the periodic sweep by forcing the counter to 99 (next call → 100).
     main._login_attempt_counter = 99
     main._login_blocked("10.0.0.99")  # fires the prune then returns False
@@ -180,10 +183,12 @@ def test_rate_limiter_isolated_per_ip():
 
 
 def test_rate_limiter_prunes_stale_buckets():
+    import time as _time
     rl = main._RateLimiter(max_requests=3, window_seconds=60)
+    now = _time.monotonic()
     # Insert a stale bucket directly.
-    rl._buckets["dead.ip"] = [1.0]
-    rl._buckets["alive.ip"] = [float("inf")]
+    rl._buckets["dead.ip"] = [now - 120]
+    rl._buckets["alive.ip"] = [now + 9999]
     rl._hits = 199  # next call triggers the sweep
     asyncio.run(rl(_Req("other.ip")))
     assert "dead.ip" not in rl._buckets
