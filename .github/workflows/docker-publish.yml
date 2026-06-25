@@ -65,10 +65,17 @@ jobs:
       # python:3.12-slim base). Report-only: findings go to the Security tab,
       # they don't fail the publish (a base-image CVE you can't fix yet
       # shouldn't block releases). Pinned to the linux/amd64 manifest by digest.
+      # github.repository preserves case (IvoryCobra-VC) but GHCR lowercases on
+      # push; Trivy v0.36+ rejects mixed-case refs, so normalise here.
+      - name: Compute lowercase image ref
+        id: image_ref
+        run: |
+          echo "ref=$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Scan image (Trivy)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ steps.image_ref.outputs.ref }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
