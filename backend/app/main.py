@@ -36,7 +36,7 @@ def _broadcast(event_type: str, data: dict) -> None:
             q.put_nowait(msg)
         except asyncio.QueueFull:
             dead.add(q)
-    _sse_subscribers -= dead
+    _sse_subscribers.difference_update(dead)
 
 
 @asynccontextmanager
