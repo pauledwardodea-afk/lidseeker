@@ -262,7 +262,7 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
 
-### v0.4.0-beta *(unreleased)*
+### v0.4.0-beta
 - **Real-time updates** — request status changes now pushed instantly via Server-Sent Events; no more
   waiting for the next poll cycle to see a download complete.
 - **Request stats bar** — available / downloading / pending / failed counts shown at a glance in both
