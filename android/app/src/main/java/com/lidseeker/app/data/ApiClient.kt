@@ -1,6 +1,5 @@
 package com.lidseeker.app.data
 
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -8,7 +7,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
 import retrofit2.Retrofit
-import java.util.concurrent.TimeUnit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlin.time.Duration.Companion.seconds
 
 /** Snapshot of the mutable connection config, read fresh on every request. */
 data class ConnConfig(val baseUrl: String, val token: String)
@@ -23,8 +23,8 @@ object ApiClient {
         val client = OkHttpClient.Builder()
             .addInterceptor(DynamicHostInterceptor(configProvider))
             .addInterceptor(UnauthorizedInterceptor(onUnauthorized))
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(40, TimeUnit.SECONDS)   // /request may add an artist + wait
+            .connectTimeout(15.seconds)
+            .readTimeout(40.seconds)
             .build()
 
         return Retrofit.Builder()
