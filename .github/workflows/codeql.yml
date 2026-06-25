@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Static analysis for the internet-facing codebases: the backend (Python) and
+# the web UI (JS/TS). Uses CodeQL's buildless analysis (build-mode: none) so no
+# build is needed — fast and robust. Results land in Security -> Code scanning.
+#
+# The Android app (java-kotlin) is intentionally omitted: CodeQL can't analyze
+# Kotlin buildlessly yet, so it would need the full Android Gradle/SDK toolchain
+# wired in just to scan a client that only talks to the (scanned) backend. Add a
+# java-kotlin entry with a manual Gradle build later if it's worth the CI cost.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "23 4 * * 1"   # weekly, catches newly-published query updates
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python                  # backend/
+            build-mode: none
+          - language: javascript-typescript   # backend/web/
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

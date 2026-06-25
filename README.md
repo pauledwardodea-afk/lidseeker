@@ -101,8 +101,36 @@ Then open **`http://<host>:5056`** in a browser and sign in with your `APP_USER`
 web UI is built into the backend, nothing else to deploy.
 
 The image is multi-arch (amd64 + arm64), so it runs on x86 servers and ARM boxes (e.g. a Raspberry Pi)
-alike. Put the backend behind a reverse proxy (Caddy, nginx, Traefik, a Cloudflare Tunnel, …) for an
-HTTPS URL you can use from anywhere, or just use `http://<host>:5056` on your LAN.
+alike.
+
+### Exposing it safely (HTTPS)
+
+lidseeker speaks plain HTTP and is meant to sit behind a reverse proxy that terminates TLS — don't put
+it on the public internet on `:5056` directly. On your LAN, `http://<host>:5056` is fine as-is.
+
+For a public HTTPS URL you have two easy paths:
+
+- **Cloudflare Tunnel / Tailscale** — no ports to open; point the tunnel at `http://<host>:5056`.
+- **Bundled Caddy overlay** — automatic Let's Encrypt certificates, one command:
+
+  ```bash
+  DOMAIN=lidseeker.example.com \
+  docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+  ```
+
+  (`DOMAIN` must resolve to this host and ports 80 + 443 must be reachable for the ACME challenge.)
+  Already run Traefik or nginx? Just proxy it to `http://<host>:5056` instead.
+
+**When exposing it, also:**
+
+- Use a strong `APP_PASSWORD`. The login endpoint is rate-limited (failed attempts per IP), and a
+  random `JWT_SECRET` is generated + persisted automatically if you don't set one.
+- Set `TRUST_PROXY=true` so the rate-limiter sees real client IPs via `X-Forwarded-For`.
+- Set `SECURITY_HSTS=true` once you're always on HTTPS.
+
+The backend ships safe response headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`);
+add a Content-Security-Policy at your proxy if you want one. See [`.env.example`](backend/.env.example)
+for all hardening settings.
 
 ### Optional: Android app
 

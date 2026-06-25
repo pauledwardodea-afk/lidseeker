@@ -16,11 +16,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt ruff pytest
+      - run: pip install -r requirements.txt ruff pytest pip-audit
       - name: Lint (ruff)
         run: ruff check app tests
       - name: Test (pytest)
         run: pytest -q
+      # Dependency vuln scan (complements Dependabot — fails fast in CI).
+      # Non-blocking: surfaces advisories without blocking merges on an
+      # unfixable transitive CVE. Drop `continue-on-error` to make it a gate.
+      - name: Audit Python deps (pip-audit)
+        continue-on-error: true
+        run: pip-audit -r requirements.txt
 
   web:
     runs-on: ubuntu-latest
@@ -39,6 +45,10 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
+      # Non-blocking dependency audit (see backend note above).
+      - name: Audit npm deps
+        continue-on-error: true
+        run: npm audit --audit-level=high
 
   android:
     runs-on: ubuntu-latest

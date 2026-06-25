@@ -1,0 +1,27 @@
+# Optional HTTPS overlay: puts Caddy in front of lidseeker and fetches a
+# Let's Encrypt certificate automatically. Layer it on top of the base file:
+#
+#   DOMAIN=lidseeker.example.com \
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# Requirements: DOMAIN must point at this host and ports 80 + 443 must be
+# reachable from the internet (that's how Caddy completes the ACME challenge).
+# Then set SECURITY_HSTS=true and TRUST_PROXY=true in .env.
+#
+# Already using a Cloudflare Tunnel, Traefik, or an existing nginx? You don't
+# need this — point that proxy at http://<host>:5056 instead.
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: lidseeker-caddy
+    restart: unless-stopped
+    network_mode: host          # reach lidseeker at localhost:5056
+    env_file: .env              # provides DOMAIN (and PORT)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

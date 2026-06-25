@@ -1,0 +1,13 @@
+# Caddy reverse proxy for lidseeker with automatic HTTPS.
+# DOMAIN and PORT come from .env (see docker-compose.tls.yml). PORT defaults to 5056.
+{$DOMAIN} {
+	reverse_proxy localhost:{$PORT:5056}
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+}

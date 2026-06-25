@@ -93,6 +93,21 @@ def _resolve_jwt_secret() -> str:
 JWT_SECRET = _resolve_jwt_secret()
 JWT_TTL_HOURS = int(os.environ.get("JWT_TTL_HOURS", "48"))  # 2 days
 
+# --- Hardening for public exposure ---
+# Trust X-Forwarded-For from a front proxy so the login rate-limiter sees the
+# real client IP (not the proxy's). Only enable when actually behind a trusted
+# reverse proxy — otherwise a client can spoof the header to dodge the limiter.
+TRUST_PROXY = _bool("TRUST_PROXY", False)
+# Brute-force protection on /api/auth/login: at most N failed attempts per
+# client IP per window before further attempts get a 429.
+LOGIN_RATE_LIMIT_ATTEMPTS = int(os.environ.get("LOGIN_RATE_LIMIT_ATTEMPTS", "10"))
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(
+    os.environ.get("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "300")
+)
+# Send HSTS (forces HTTPS for a year). Off by default because many self-host on
+# plain-HTTP LANs; turn on only when always served over HTTPS via a proxy.
+SECURITY_HSTS = _bool("SECURITY_HSTS", False)
+
 # --- slskd (Soulseek daemon — for live download progress in the request pipeline) ---
 SLSKD_URL = os.environ.get("SLSKD_URL", "http://localhost:5030").rstrip("/")
 SLSKD_API_KEY = os.environ.get("SLSKD_API_KEY", "")
