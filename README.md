@@ -16,7 +16,7 @@
 
 > [!WARNING]
 > **Lidseeker is in beta.** It works and is in daily use, but it's early software — expect rough edges
-> and the occasional breaking change. There are no logo yet. Back up the `/data` volume, and please
+> and the occasional breaking change. Back up the `/data` volume, and please
 > [open an issue](https://github.com/IvoryCobra-VC/lidseeker/issues) for anything you hit. Feedback
 > welcome!
 
@@ -105,7 +105,7 @@ alike.
 
 ### Exposing it safely (HTTPS)
 
-lidseeker speaks plain HTTP and is meant to sit behind a reverse proxy that terminates TLS — don't put
+Lidseeker speaks plain HTTP and is meant to sit behind a reverse proxy that terminates TLS — don't put
 it on the public internet on `:5056` directly. On your LAN, `http://<host>:5056` is fine as-is.
 
 For a public HTTPS URL you have two easy paths:
@@ -136,8 +136,8 @@ for all hardening settings.
 
 Prefer a native app? **Download the latest `lidseeker-*.apk` from the
 [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases)** and sideload it (enable
-"install from unknown sources"). On first launch, enter the backend URL and your `APP_USER` /
-`APP_PASSWORD`.
+"install from unknown sources"). A `SHA256` checksum file is published alongside each APK for
+verification. On first launch, enter the backend URL and your `APP_USER` / `APP_PASSWORD`.
 
 (You can also build it yourself — see [`android/`](android).)
 
@@ -163,7 +163,7 @@ when it's off.
 | Live download progress | ✅ (Lidarr queue) | ✅ (Soulseek transfers, earlier visibility) |
 | Give-up after N searches → "Failed" | ✅ | ✅ |
 | FLAC/MP3 quality toggle | — | ✅ |
-| "Search now" | ✅ (Lidarr AlbumSearch) | ✅ (restart Soularr) |
+| "Search now" (per request) | ✅ (Lidarr AlbumSearch) | ✅ (restart Soularr) |
 | Push notifications (ntfy) | ✅ | ✅ |
 
 To enable the adapter, set the `SLSKD_*` / `SOULARR_*` vars and layer the overlay (it adds the Soularr
@@ -178,17 +178,27 @@ docker compose -f docker-compose.yml -f docker-compose.soularr.yml up -d
 - **Built-in web UI** — a full-featured web app (Discover, Search, request pipeline, Settings) served by
   the backend, plus an optional native Android app. Both talk to the same API.
 - **Search & request** — artists, albums, and individual songs (MusicBrainz metadata via Lidarr). Tap
-  **Request** and Lidseeker adds + monitors it in Lidarr and kicks off a search.
+  **Request** and Lidseeker adds + monitors it in Lidarr and kicks off a search. Track requests show a
+  confirmation that the full album will be downloaded.
+- **"In library" badges** — search results and Discover highlight albums already in your Lidarr library
+  so you don't accidentally re-request something you own.
 - **Live request pipeline** — every request shows a 5-stage tracker (requested → searching → downloading →
-  importing → available) with a progress bar, updated as it moves.
+  importing → available) with a progress bar. Status updates arrive instantly via **Server-Sent Events**
+  (no polling delay).
+- **Request stats bar** — a summary line at the top of the requests view shows how many are ready,
+  downloading, pending, and failed at a glance.
+- **Per-request "Search Now"** — trigger a search for a single specific request rather than all pending
+  ones at once. Useful when one album is being elusive while others download fine.
+- **Clear fulfilled requests** — bulk-remove all "available" requests once you've listened to them.
 - **Gives up gracefully** — a request that finds no source after a few search cycles is marked **Failed**
   (red) with a one-tap **Retry**, instead of hanging on "pending" forever.
 - **Discover** — unowned releases from artists already in your library, browsable by genre and decade.
+  Filter selections are preserved in the URL so navigating away and back restores your view.
 - **Push notifications** — optional [ntfy](https://ntfy.sh) push the moment an album becomes available
   (works with the app closed).
 - **Multi-user** — admin-managed accounts (Settings → Users). Everyone sees only their own
   requests; admins see everyone's, with who requested what. JWT auth; your Lidarr key stays on the
-  server.
+  server. All users can change their own password from Settings.
 
 ## Configuration
 
@@ -215,6 +225,7 @@ All settings are environment variables on the backend container.
 | `METADATA_PROFILE_ID` | `1` | Lidarr metadata profile id |
 | `NTFY_URL`, `NTFY_TOPIC` | – | Enable ntfy push notifications |
 | `SERVICE_LINKS` | – | `Name\|url` chips shown under a request, comma-separated |
+| `TRUST_PROXY` | `false` | Set `true` when behind a reverse proxy so rate-limiting uses `X-Forwarded-For` |
 
 **Soularr + slskd adapter (optional)**
 
@@ -250,6 +261,24 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 ## Changelog
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
+
+### v0.4.0-beta *(unreleased)*
+- **Real-time updates** — request status changes now pushed instantly via Server-Sent Events; no more
+  waiting for the next poll cycle to see a download complete.
+- **Request stats bar** — available / downloading / pending / failed counts shown at a glance in both
+  the web UI and Android app.
+- **Per-request Search Now** — trigger a search for a single specific album rather than everything pending
+  at once.
+- **Clear fulfilled requests** — bulk-remove all "available" requests in one tap.
+- **Password change** — any user can change their own password from Settings (web + Android).
+- **Track request confirmation** — requesting a song now shows a dialog explaining the full album will be
+  downloaded.
+- **"In library" badges** — search results and Discover highlight albums already in your library.
+- **Discover filter state in URL** — genre/decade filters survive navigation (browser back button restores
+  the same filtered view).
+- **APK SHA256 checksums** — each release now ships a `.sha256` file for APK verification.
+- **Bug fix:** `TRUST_PROXY=true` now correctly reaches the login rate-limiter (previously the
+  `X-Forwarded-For` header was ignored, so all logins appeared to come from the proxy IP).
 
 ### v0.3.0-beta
 - **Multi-user accounts** (admin-managed) — add users in Settings → Users; requests are attributed
