@@ -34,9 +34,9 @@ android {
         }
     }
     lint {
-        // Known crash in NonNullableMutableLiveDataDetector with this version
-        // of the Kotlin Analysis API (AGP 8.7 + lifecycle-livedata-core).
-        disable += "NonNullableMutableLiveData"
+        // Known crash in NonNullableMutableLiveDataDetector with AGP 8.7 +
+        // this Kotlin Analysis API version. Check ID is NullSafeMutableLiveData.
+        disable += "NullSafeMutableLiveData"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
