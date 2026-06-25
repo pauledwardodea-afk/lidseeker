@@ -24,7 +24,7 @@ jobs:
       security-events: write   # upload the Trivy SARIF report to code scanning
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (for arm64 emulation)
         uses: docker/setup-qemu-action@v3
