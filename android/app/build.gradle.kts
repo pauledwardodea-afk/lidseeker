@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.lidseeker.app"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.lidseeker.app"
