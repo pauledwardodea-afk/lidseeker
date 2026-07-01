@@ -262,6 +262,12 @@ The Android app builds with `./gradlew assembleDebug` (Android SDK + JDK 17).
 
 Full history and downloads on the [releases page](https://github.com/IvoryCobra-VC/lidseeker/releases).
 
+### v0.4.1-beta
+- **Live download progress no longer hammers slskd** — the transfers list is fetched once and shared
+  (5 s cache) across all requests being resolved, instead of once per request row.
+- **Backend INFO logs actually emit** — the root logger was left at WARNING, silently dropping
+  operational logs (search give-up counter, slskd cleanup); httpx per-request noise is filtered out.
+
 ### v0.4.0-beta
 - **Real-time updates** — request status changes now pushed instantly via Server-Sent Events; no more
   waiting for the next poll cycle to see a download complete.

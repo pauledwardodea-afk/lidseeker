@@ -21,6 +21,12 @@ from .schemas import (
     SearchResult, ServiceLink, Settings, SettingsIn, StatsOut, TokenOut, Track, User, UserCreate,
 )
 
+# Uvicorn only configures its own loggers; without this the app's log.info
+# calls (give-up counter, slskd cleanup, …) are dropped at root level WARNING.
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
 log = logging.getLogger("lidseeker")
 
 # Connected SSE clients — each is an asyncio.Queue the SSE endpoint drains.

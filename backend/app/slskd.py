@@ -3,7 +3,9 @@ in the request pipeline. slskd transfers are keyed by Soulseek username +
 filename, not by Lidarr album id, so we match a request to its transfers
 heuristically: the artist name appearing in the download path.
 """
+import asyncio
 import re
+import time
 from typing import Optional
 
 import httpx
@@ -11,6 +13,30 @@ import httpx
 from . import config
 
 _HEADERS = {"X-API-Key": config.SLSKD_API_KEY}
+
+# One transfers fetch serves every request row when /api/requests fans out
+# concurrently — cache it briefly, with a lock against cold-cache stampedes.
+_TRANSFERS_TTL = 5.0
+_transfers_cache: tuple[float, Optional[list]] = (0.0, None)
+_transfers_lock = asyncio.Lock()
+
+
+async def _downloads() -> Optional[list]:
+    """Current slskd downloads, cached for _TRANSFERS_TTL. None = unreachable."""
+    global _transfers_cache
+    async with _transfers_lock:
+        now = time.monotonic()
+        if now - _transfers_cache[0] < _TRANSFERS_TTL:
+            return _transfers_cache[1]
+        try:
+            async with _client() as c:
+                r = await c.get("/transfers/downloads")
+                r.raise_for_status()
+                users = r.json()
+        except httpx.HTTPError:
+            users = None
+        _transfers_cache = (time.monotonic(), users)
+        return users
 
 
 def _client() -> httpx.AsyncClient:
@@ -46,12 +72,8 @@ async def artist_progress(artist_name: Optional[str]) -> Optional[dict]:
     needle = _norm(artist_name)
     if not needle:
         return None
-    try:
-        async with _client() as c:
-            r = await c.get("/transfers/downloads")
-            r.raise_for_status()
-            users = r.json()
-    except httpx.HTTPError:
+    users = await _downloads()
+    if users is None:
         return None
 
     size_total = bytes_done = files_total = files_done = 0
